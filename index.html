@@ -96,6 +96,13 @@
 
     let currentMatchedStars = [];
 
+    // Register minimal Service Worker required for native Android notifications
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js").catch(err => {
+        console.warn("ServiceWorker registration failed:", err);
+      });
+    }
+
     function normalize(str) {
       return (str || "")
         .toLowerCase()
@@ -125,8 +132,8 @@
 
     // Sends the current active stars straight into your swipe-down notification shade
     async function pinStarsToShade() {
-      if (!("Notification" in window)) {
-        alert("Notifications not supported in this browser mode.");
+      if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+        alert("Notifications are not supported in this browser mode.");
         return;
       }
 
@@ -136,28 +143,31 @@
       }
 
       if (permission !== "granted") {
-        alert("Notification permission denied. Please allow notifications in Pixel Settings.");
+        alert("Notification permission denied. Please allow notifications in site settings.");
         return;
       }
 
-      if (currentMatchedStars.length === 0) {
-        new Notification("OSRS Stars", {
-          body: "No stars active at your 6 locations.",
-          icon: "icon-192.png"
+      try {
+        const registration = await navigator.serviceWorker.ready;
+
+        let summaryText = "No stars active at your 6 locations right now.";
+        if (currentMatchedStars.length > 0) {
+          summaryText = currentMatchedStars.slice(0, 3).map(s => 
+            `W${s.world} (T${s.tier}) - ${s.location} [${s.time}]`
+          ).join("\n");
+        }
+
+        await registration.showNotification("Active Safe Stars", {
+          body: summaryText,
+          icon: "icon-192.png",
+          badge: "icon-192.png",
+          tag: "osrs-star-summary",
+          renotify: true
         });
-        return;
+      } catch (err) {
+        alert("Could not display notification: " + err.message);
+        console.error(err);
       }
-
-      // Format top 3 stars into readable lines
-      const summaryText = currentMatchedStars.slice(0, 3).map(s => 
-        `W${s.world} (T${s.tier}) - ${s.location} [${s.time}]`
-      ).join("\n");
-
-      new Notification("Active Safe Stars", {
-        body: summaryText,
-        icon: "icon-192.png",
-        tag: "osrs-star-summary" // Overwrites previous notification so it doesn't pile up
-      });
     }
 
     async function loadStars() {
