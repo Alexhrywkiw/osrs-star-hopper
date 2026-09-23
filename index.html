@@ -26,9 +26,10 @@
       background: #2a2a2a;
       color: #ffd700;
       border: 1px solid #444;
-      padding: 6px 12px;
+      padding: 6px 14px;
       border-radius: 6px;
       font-weight: bold;
+      cursor: pointer;
     }
     #status {
       text-align: center;
@@ -45,7 +46,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      active-background-color: #333;
+      cursor: pointer;
     }
     .star-card:active {
       background: #2d2d2d;
@@ -77,6 +78,8 @@
   <div id="star-list"></div>
 
   <script>
+    const WORKER_URL = "https://osrs-star-proxy.windvampireeast.workers.dev/";
+
     const allowedLocations = [
       "Chambers of Xeric bank",
       "Myths' Guild",
@@ -96,34 +99,15 @@
 
     const normalizedAllowed = allowedLocations.map(normalize);
 
-    function generateToken() {
-      const header = btoa(JSON.stringify({ alg: "none", typ: "JWT" })).replace(/=/g, "");
-      const payload = btoa(JSON.stringify({ data: "osrs_stars", exp: Math.floor(Date.now() / 1000) + 3600 })).replace(/=/g, "");
-      return `${header}.${payload}.`;
-    }
-
-  async function fetchStarData() {
-  const workerUrl = "https://osrs-star-proxy.windvampireeast.workers.dev/";
-
-  const res = await fetch(workerUrl);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return await res.json();
-      }
-      });
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return await res.json();
-    }
-
     async function onStarTapped(world) {
-      // 1. Copy world number to Android clipboard
+      // 1. Copy world number to clipboard
       try {
         await navigator.clipboard.writeText(world.toString());
       } catch (err) {
         console.warn("Clipboard access failed", err);
       }
 
-      // 2. Launch OSRS Mobile
+      // 2. Launch OSRS Mobile client
       const osrsPackage = "com.jagex.oldscape.android";
       window.location.href = `intent://#Intent;package=${osrsPackage};action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;end;`;
     }
@@ -137,17 +121,36 @@
         statusEl.style.display = "block";
         listEl.innerHTML = "";
 
-        const starData = await fetchStarData();
-        const list = Array.isArray(starData) ? starData : (starData.stars || starData.data || []);
+        const res = await fetch(WORKER_URL);
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+
+        const json = await res.json();
+
+        // Extract list regardless of key name or nesting
+        let rawList = [];
+        if (Array.isArray(json)) {
+          rawList = json;
+        } else {
+          for (const key of Object.keys(json)) {
+            if (Array.isArray(json[key])) {
+              rawList = json[key];
+              break;
+            }
+          }
+        }
+
         const matchedStars = [];
 
-        for (const item of list) {
+        for (const item of rawList) {
           const rawLocation = item.loc || item.location || "";
-          const world = item.world || "-";
+          const world = item.world || item.worldNumber || "-";
           const tier = item.tier || "-";
-          const timeVal = item.time !== undefined ? `${item.time}m` : "-";
+          const timeVal = item.time !== undefined ? `${item.time}m` : (item.minTime ? `${item.minTime}m` : "-");
 
-          const matchIndex = normalizedAllowed.indexOf(normalize(rawLocation));
+          const norm = normalize(rawLocation);
+          // Check exact match or partial containment
+          const matchIndex = normalizedAllowed.findIndex(allowed => norm.includes(allowed) || allowed.includes(norm));
+          
           if (matchIndex !== -1) {
             matchedStars.push({
               world,
@@ -159,7 +162,8 @@
         }
 
         if (matchedStars.length === 0) {
-          statusEl.innerText = "No matching stars active.";
+          statusEl.innerText = `Checked ${rawList.length} global stars. None active at your 6 locations right now.`;
+          statusEl.style.display = "block";
           return;
         }
 
@@ -178,8 +182,9 @@
         `).join("");
 
       } catch (err) {
-        statusEl.innerText = "Failed to load stars: " + err.message;
-        console.error(err);
+        statusEl.innerText = "Error: " + err.message;
+        statusEl.style.display = "block";
+        console.error("Star loading failed:", err);
       }
     }
 
