@@ -22,15 +22,17 @@
       margin-bottom: 16px;
     }
     h1 { font-size: 1.25rem; color: #ffd700; }
-    button#refresh-btn {
+    .btn-group { display: flex; gap: 8px; }
+    button {
       background: #2a2a2a;
       color: #ffd700;
       border: 1px solid #444;
-      padding: 6px 14px;
+      padding: 6px 12px;
       border-radius: 6px;
       font-weight: bold;
       cursor: pointer;
     }
+    button:active { background: #383838; }
     #status {
       text-align: center;
       margin: 24px 0;
@@ -71,7 +73,10 @@
 
   <header>
     <h1>★ Star Hopper</h1>
-    <button id="refresh-btn" onclick="loadStars()">Refresh</button>
+    <div class="btn-group">
+      <button id="notify-btn" onclick="pinStarsToShade()">Pin to Tray</button>
+      <button id="refresh-btn" onclick="loadStars()">Refresh</button>
+    </div>
   </header>
 
   <div id="status">Loading stars...</div>
@@ -89,6 +94,8 @@
       "Prifddinas Zalcano entrance"
     ];
 
+    let currentMatchedStars = [];
+
     function normalize(str) {
       return (str || "")
         .toLowerCase()
@@ -100,37 +107,58 @@
     const normalizedAllowed = allowedLocations.map(normalize);
 
     async function onStarTapped(world) {
-  // 1. Copy world to clipboard
-  try {
-    await navigator.clipboard.writeText(world.toString());
-  } catch (err) {
-    console.warn("Clipboard failed", err);
-  }
+      try {
+        await navigator.clipboard.writeText(world.toString());
+      } catch (err) {
+        console.warn("Clipboard failed", err);
+      }
 
-  // 2. Launch OSRS using the explicit Android component definition
-  const intentUri = 
-    "intent:#Intent;" +
-    "component=com.jagex.oldscape.android/com.jagex.oldscape.android.AndroidLauncher;" +
-    "action=android.intent.action.MAIN;" +
-    "category=android.intent.category.LAUNCHER;" +
-    "end;";
+      const intentUri = 
+        "intent:#Intent;" +
+        "component=com.jagex.oldscape.android/com.jagex.oldscape.android.AndroidLauncher;" +
+        "action=android.intent.action.MAIN;" +
+        "category=android.intent.category.LAUNCHER;" +
+        "end;";
 
-  window.location.href = intentUri;
-}
-    async function showPersistentNotification(starText) {
-  const permission = await Notification.requestPermission();
-  if (permission === "granted") {
-    // Registers an ongoing notification in the Android shade
-    navigator.serviceWorker.ready.then(registration => {
-      registration.showNotification("Active Stars", {
-        body: starText,
+      window.location.href = intentUri;
+    }
+
+    // Sends the current active stars straight into your swipe-down notification shade
+    async function pinStarsToShade() {
+      if (!("Notification" in window)) {
+        alert("Notifications not supported in this browser mode.");
+        return;
+      }
+
+      let permission = Notification.permission;
+      if (permission !== "granted") {
+        permission = await Notification.requestPermission();
+      }
+
+      if (permission !== "granted") {
+        alert("Notification permission denied. Please allow notifications in Pixel Settings.");
+        return;
+      }
+
+      if (currentMatchedStars.length === 0) {
+        new Notification("OSRS Stars", {
+          body: "No stars active at your 6 locations.",
+          icon: "icon-192.png"
+        });
+        return;
+      }
+
+      // Format top 3 stars into readable lines
+      const summaryText = currentMatchedStars.slice(0, 3).map(s => 
+        `W${s.world} (T${s.tier}) - ${s.location} [${s.time}]`
+      ).join("\n");
+
+      new Notification("Active Safe Stars", {
+        body: summaryText,
         icon: "icon-192.png",
-        tag: "osrs-star-tracker", // Replaces existing notification so it doesn't spam
-        renotify: true
+        tag: "osrs-star-summary" // Overwrites previous notification so it doesn't pile up
       });
-    });
-  }
-}
+    }
 
     async function loadStars() {
       const statusEl = document.getElementById("status");
@@ -146,7 +174,6 @@
 
         const json = await res.json();
 
-        // Extract list regardless of key name or nesting
         let rawList = [];
         if (Array.isArray(json)) {
           rawList = json;
@@ -159,7 +186,7 @@
           }
         }
 
-        const matchedStars = [];
+        currentMatchedStars = [];
 
         for (const item of rawList) {
           const rawLocation = item.loc || item.location || "";
@@ -168,11 +195,10 @@
           const timeVal = item.time !== undefined ? `${item.time}m` : (item.minTime ? `${item.minTime}m` : "-");
 
           const norm = normalize(rawLocation);
-          // Check exact match or partial containment
           const matchIndex = normalizedAllowed.findIndex(allowed => norm.includes(allowed) || allowed.includes(norm));
           
           if (matchIndex !== -1) {
-            matchedStars.push({
+            currentMatchedStars.push({
               world,
               tier,
               location: allowedLocations[matchIndex],
@@ -181,14 +207,14 @@
           }
         }
 
-        if (matchedStars.length === 0) {
+        if (currentMatchedStars.length === 0) {
           statusEl.innerText = `Checked ${rawList.length} global stars. None active at your 6 locations right now.`;
           statusEl.style.display = "block";
           return;
         }
 
         statusEl.style.display = "none";
-        const top5 = matchedStars.slice(0, 5);
+        const top5 = currentMatchedStars.slice(0, 5);
 
         listEl.innerHTML = top5.map(star => `
           <div class="star-card" onclick="onStarTapped('${star.world}')">
