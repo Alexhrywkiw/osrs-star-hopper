@@ -1,0 +1,16 @@
+{
+  "name": "Star Hopper",
+  "short_name": "StarHopper",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#121212",
+  "theme_color": "#121212",
+  "icons": [
+    {
+      "src": "https://oldschool.runescape.wiki/images/Shooting_Star.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
