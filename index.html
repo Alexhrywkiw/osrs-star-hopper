@@ -107,18 +107,15 @@
     console.warn("Clipboard failed", err);
   }
 
-  // 2. Trigger native Android share sheet with OSRS target
-  if (navigator.share) {
-    try {
-      await navigator.share({
-        text: `World ${world}`
-      });
-    } catch (err) {
-      // User cancelled or dismissed the drawer
-    }
-  } else {
-    alert(`World ${world} copied to clipboard! Switch to OSRS.`);
-  }
+  // 2. Launch OSRS using the explicit Android component definition
+  const intentUri = 
+    "intent:#Intent;" +
+    "component=com.jagex.oldscape.android/com.jagex.oldscape.android.AndroidLauncher;" +
+    "action=android.intent.action.MAIN;" +
+    "category=android.intent.category.LAUNCHER;" +
+    "end;";
+
+  window.location.href = intentUri;
 }
 
     async function loadStars() {
