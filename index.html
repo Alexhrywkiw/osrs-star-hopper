@@ -102,19 +102,13 @@
       return `${header}.${payload}.`;
     }
 
-    async function fetchStarData() {
-      const token = generateToken();
-      const targetUrl = "https://osrsportal.com/activestars-foxtrot";
-      // Route through corsproxy.io to bypass browser Origin/Referer block
-      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+  async function fetchStarData() {
+  const workerUrl = "https://osrs-star-proxy.windvampireeast.workers.dev/";
 
-      const res = await fetch(proxyUrl, {
-        method: "GET",
-        headers: {
-          "Accept": "application/json, text/javascript, */*; q=0.01",
-          "Authorization": `Bearer ${token}`,
-          "X-Requested-With": "XMLHttpRequest"
-        }
+  const res = await fetch(workerUrl);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return await res.json();
+      }
       });
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
