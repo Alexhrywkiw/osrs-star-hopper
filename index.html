@@ -100,17 +100,26 @@
     const normalizedAllowed = allowedLocations.map(normalize);
 
     async function onStarTapped(world) {
-      // 1. Copy world number to clipboard
-      try {
-        await navigator.clipboard.writeText(world.toString());
-      } catch (err) {
-        console.warn("Clipboard access failed", err);
-      }
+  // 1. Copy world to clipboard
+  try {
+    await navigator.clipboard.writeText(world.toString());
+  } catch (err) {
+    console.warn("Clipboard failed", err);
+  }
 
-      // 2. Launch OSRS Mobile client
-      const osrsPackage = "com.jagex.oldscape.android";
-      window.location.href = `intent://#Intent;package=${osrsPackage};action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;end;`;
+  // 2. Trigger native Android share sheet with OSRS target
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        text: `World ${world}`
+      });
+    } catch (err) {
+      // User cancelled or dismissed the drawer
     }
+  } else {
+    alert(`World ${world} copied to clipboard! Switch to OSRS.`);
+  }
+}
 
     async function loadStars() {
       const statusEl = document.getElementById("status");
